@@ -1,13 +1,11 @@
 'use client';
 import { useState, useEffect } from "react";
-import { Chess } from "chess.js";
+import { Chess, Square } from "chess.js";
 
-// 1. Исправление ошибки TypeScript для Vercel
+// 1. Расширенная декларация типов для глобального объекта Telegram
 declare global {
   interface Window {
-    Telegram?: {
-      WebApp: any;
-    };
+    Telegram?: any;
   }
 }
 
@@ -22,9 +20,11 @@ export default function TelegramChess() {
 
   useEffect(() => {
     setMounted(true);
-    // Проверка наличия Telegram WebApp
+    // @ts-ignore
     if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+      // @ts-ignore
       window.Telegram.WebApp.ready();
+      // @ts-ignore
       window.Telegram.WebApp.expand();
     }
   }, []);
@@ -33,7 +33,7 @@ export default function TelegramChess() {
 
   const getStrategicAnalysis = (move: any, fenBefore: string) => {
     const tempGame = new Chess(fenBefore);
-    const piece = tempGame.get(move.from);
+    const piece = tempGame.get(move.from as Square);
     let text = `✅ План: Ход ${piece.type.toUpperCase()} на ${move.to}. `;
     if (['e4', 'd4', 'e5', 'd5'].includes(move.to)) text += "Контроль центра. ";
     if (move.captured) text += `Взятие ${move.captured.toUpperCase()}! `;
@@ -47,7 +47,12 @@ export default function TelegramChess() {
     const gameCopy = new Chess(game.fen());
     
     try {
-      const moveResult = gameCopy.move({ from: moveId.slice(0,2), to: moveId.slice(2,4), promotion: 'q' });
+      const moveResult = gameCopy.move({ 
+        from: moveId.slice(0,2), 
+        to: moveId.slice(2,4), 
+        promotion: 'q' 
+      });
+
       if (moveResult) {
         setGame(new Chess(gameCopy.fen()));
         setPendingMove(null);
@@ -55,7 +60,7 @@ export default function TelegramChess() {
         setIsThinking(true);
         setStatusMessage("Компьютер думает...");
 
-        // Вибрация в Telegram
+        // @ts-ignore
         if (window.Telegram?.WebApp) window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
 
         setTimeout(() => {
@@ -88,7 +93,7 @@ export default function TelegramChess() {
         }, 2000);
       }
     } catch (e) {
-      alert("Ошибка хода");
+      console.error(e);
     }
   };
 
@@ -96,9 +101,13 @@ export default function TelegramChess() {
     setPendingMove(moveId);
     const gameCopy = new Chess(game.fen());
     try {
+      // @ts-ignore
       const move = gameCopy.move({ from: moveId.slice(0,2), to: moveId.slice(2,4), promotion: 'q' });
       setAnalysis(getStrategicAnalysis(move, game.fen()));
+      // @ts-ignore
       if (window.Telegram?.WebApp) window.Telegram.WebApp.HapticFeedback.selectionChanged();
+      // Отменяем ход, так как это был только предпросмотр
+      gameCopy.undo();
     } catch {
       setAnalysis("Ход стратегически возможен.");
     }
@@ -111,16 +120,10 @@ export default function TelegramChess() {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', flexDirection: 'column', alignItems: 'center', 
-      padding: '10px', backgroundColor: '#17212b', minHeight: '100vh', 
-      color: '#f5f5f5', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' 
-    }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px', backgroundColor: '#17212b', minHeight: '100vh', color: '#f5f5f5', fontFamily: 'sans-serif' }}>
       <h3 style={{ color: '#6ab2f2', margin: '10px 0' }}>Шахматный Тренер</h3>
-      
       <div style={{ height: '30px', fontSize: '14px', color: '#808d99' }}>{statusMessage}</div>
 
-      {/* Отрисовка сетки координат вместе с доской */}
       <div style={{ padding: '10px', backgroundColor: '#242f3d', borderRadius: '8px', marginTop: '5px' }}>
          <div style={{ display: 'flex', marginLeft: '20px' }}>
           {['a','b','c','d','e','f','g','h'].map(l => (
@@ -151,10 +154,7 @@ export default function TelegramChess() {
           <div style={{ padding: '12px', backgroundColor: '#242f3d', borderRadius: '10px', borderLeft: '4px solid #6ab2f2', marginBottom: '10px' }}>
             <p style={{ fontSize: '13px', margin: '0 0 10px 0', color: '#f5f5f5', whiteSpace: 'pre-line' }}>{analysis}</p>
             {!isThinking && pendingMove && (
-              <button onClick={confirmMove} style={{ 
-                width: '100%', padding: '14px', backgroundColor: '#31b545', 
-                color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold' 
-              }}>
+              <button onClick={confirmMove} style={{ width: '100%', padding: '14px', backgroundColor: '#31b545', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}>
                 ПОДТВЕРДИТЬ ХОД
               </button>
             )}
@@ -163,21 +163,12 @@ export default function TelegramChess() {
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
           {!isThinking && !pendingMove && currentOptions.map(id => (
-            <button key={id} onClick={() => proposeMove(id)}
-              style={{ 
-                flex: '1 1 40%', padding: '15px 10px', borderRadius: '10px', 
-                backgroundColor: '#2b5278', border: 'none', color: 'white', 
-                fontWeight: 'bold', fontSize: '14px' 
-              }}>
+            <button key={id} onClick={() => proposeMove(id)} style={{ flex: '1 1 40%', padding: '15px 10px', borderRadius: '10px', backgroundColor: '#2b5278', border: 'none', color: 'white', fontWeight: 'bold', fontSize: '14px' }}>
               {id.slice(0,2)} → {id.slice(2,4)}
             </button>
           ))}
         </div>
       </div>
-      
-      <button onClick={() => window.location.reload()} style={{ marginTop: '20px', background: 'none', border: 'none', color: '#505b67', fontSize: '12px' }}>
-        Сбросить игру
-      </button>
     </div>
   );
 }
